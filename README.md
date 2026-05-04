@@ -21,12 +21,17 @@ Dựa trên cấu trúc dự án:
 *   **Triển khai:** Streamlit (Ứng dụng web dự đoán).
 
 🚀 Hướng dẫn cài đặt và chạy
-**Khởi tạo môi trường ảo (Virtual Environment):**
+
+### 1. Khởi tạo môi trường ảo (Virtual Environment)
+```bash
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-
-**Cài đặt các thư viện cần thiết:**
+```
+### 2.Cài đặt các thư viện cần thiết:
+```bash
 pip install -r requirements.txt
-
-**Chạy ứng dụng web (trong thư mục churn_app):**
+```
+### 3.Chạy ứng dụng web (trong thư mục churn_app):
+```bash
 streamlit run churn_app/app.py
+```
