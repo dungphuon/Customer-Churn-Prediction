@@ -20,14 +20,17 @@ Dựa trên cấu trúc dự án:
 *   **Môi trường làm việc:** Jupyter Notebook, Visual Studio Code.
 *   **Triển khai:** Streamlit (Ứng dụng web dự đoán).
 
-## 🚀 Hướng dẫn cài đặt và chạy
-1. **Khởi tạo môi trường ảo (Virtual Environment):**
-   ```bash
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-2. **Cài đặt các thư viện cần thiết:**
-  ```bash
-  pip install -r requirements.txt
-3. **Chạy ứng dụng web (trong thư mục churn_app):**
-  ```bash
-  streamlit run churn_app/app.py
+🚀 Hướng dẫn cài đặt và chạy
+Khởi tạo môi trường ảo (Virtual Environment):
+
+PowerShell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+Cài đặt các thư viện cần thiết:
+
+PowerShell
+pip install -r requirements.txt
+Chạy ứng dụng web (trong thư mục churn_app):
+
+PowerShell
+streamlit run churn_app/app.py
