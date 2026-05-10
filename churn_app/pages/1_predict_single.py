@@ -4,6 +4,7 @@ import numpy as np
 import plotly.graph_objects as go
 import shap
 import sys, os
+from app import encode_input, risk_label, get_preprocessed
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # ─── Import helpers từ app.py ─────────────────────────────────────────────────
@@ -13,31 +14,34 @@ st.set_page_config(page_title="Dự đoán đơn lẻ", page_icon="🔍", layout
 
 st.markdown("""
 <style>
+    html, body, [class*="css"] { font-size: 15px; }
     .result-box {
         border-radius: 14px;
-        padding: 1.4rem 1.8rem;
-        margin: 1rem 0;
+        padding: 1.3rem 1.6rem;
+        margin: 0.8rem 0;
         text-align: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.07);
     }
-    .result-high   { background: #FCEBEB; border: 2px solid #E24B4A; }
-    .result-medium { background: #FAEEDA; border: 2px solid #BA7517; }
-    .result-low    { background: #E1F5EE; border: 2px solid #1D9E75; }
-    .result-prob   { font-size: 3rem; font-weight: 800; margin: 0.3rem 0; }
-    .result-label  { font-size: 1.2rem; font-weight: 600; }
+    .result-high   { background: #fff5f5; border: 2px solid #E24B4A; }
+    .result-medium { background: #fffaf0; border: 2px solid #BA7517; }
+    .result-low    { background: #f0fdf8; border: 2px solid #1D9E75; }
+    .result-prob   { font-size: 2.8rem; font-weight: 800; margin: 0.2rem 0; }
+    .result-label  { font-size: 1.1rem; font-weight: 600; }
     .section-header {
-        font-size: 1.05rem; font-weight: 600;
+        font-size: 1rem; font-weight: 700;
         color: #1a1a2e;
         margin: 1.2rem 0 0.6rem 0;
         padding-bottom: 0.3rem;
-        border-bottom: 2px solid #f0f0f0;
+        border-bottom: 2px solid #eef0f4;
     }
     .shap-explain {
-        font-size: 0.85rem;
-        color: #666;
-        background: #f8f9fa;
+        font-size: 0.84rem;
+        color: #555;
+        background: #f8f9fb;
         border-radius: 8px;
-        padding: 0.7rem 1rem;
+        padding: 0.65rem 1rem;
         margin-bottom: 0.8rem;
+        border: 1px solid #e8ecf0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -172,7 +176,8 @@ if submitted:
     """, unsafe_allow_html=True)
 
     # Tính SHAP
-    shap_vals = explainer.shap_values(X_input)
+    X_transformed = get_preprocessed(model, X_input)
+    shap_vals = explainer.shap_values(X_transformed)
     # Xử lý cả 2 dạng API (cũ/mới)
     if isinstance(shap_vals, np.ndarray) and shap_vals.ndim == 3:
         sv = shap_vals[0, :, 1]

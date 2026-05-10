@@ -8,7 +8,6 @@ import shap
 import os
 from sklearn.pipeline import Pipeline
 
-# ─── Cấu hình trang ───────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Churn Prediction App",
     page_icon="📊",
@@ -16,52 +15,74 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─── CSS tùy chỉnh ────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
+    /* ── Global typography ── */
+    html, body, [class*="css"] { font-size: 15px; }
+
+    /* ── Hero header ── */
     .main-title {
-        font-size: 2.2rem;
-        font-weight: 700;
+        font-size: 1.9rem;
+        font-weight: 800;
         color: #1a1a2e;
-        margin-bottom: 0.2rem;
+        letter-spacing: -0.5px;
+        margin-bottom: 0.15rem;
     }
     .sub-title {
-        font-size: 1rem;
-        color: #666;
-        margin-bottom: 2rem;
+        font-size: 0.92rem;
+        color: #888;
+        margin-bottom: 1.8rem;
+        font-weight: 400;
     }
+
+    /* ── Feature cards ── */
     .metric-card {
-        background: #f8f9fa;
-        border-radius: 12px;
-        padding: 1.2rem 1.5rem;
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 1.2rem 1.4rem;
+        border: 1px solid #e8ecf0;
         border-left: 4px solid #378ADD;
+        box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+        transition: box-shadow 0.2s;
+        height: 100%;
     }
+    .metric-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.10); }
+    .metric-card h4 { font-size: 0.97rem; font-weight: 700; margin: 0 0 0.5rem 0; color: #1a1a2e; }
+    .metric-card p  { font-size: 0.84rem; color: #666; margin: 0; line-height: 1.5; }
     .metric-card-red   { border-left-color: #E24B4A; }
     .metric-card-green { border-left-color: #1D9E75; }
     .metric-card-amber { border-left-color: #BA7517; }
+
+    /* ── Risk labels ── */
     .risk-high   { color: #E24B4A; font-weight: 700; }
     .risk-medium { color: #BA7517; font-weight: 700; }
     .risk-low    { color: #1D9E75; font-weight: 700; }
+
+    /* ── Info box ── */
     .info-box {
-        background: #E6F1FB;
+        background: #f0f6ff;
         border-radius: 10px;
-        padding: 1rem 1.2rem;
-        border: 1px solid #B5D4F4;
+        padding: 0.9rem 1.1rem;
+        border: 1px solid #c9dff7;
+        font-size: 0.87rem;
+        color: #2c4a72;
         margin-bottom: 1rem;
     }
+
+    /* ── Section header ── */
     .section-header {
-        font-size: 1.1rem;
-        font-weight: 600;
+        font-size: 1rem;
+        font-weight: 700;
         color: #1a1a2e;
-        margin: 1.5rem 0 0.8rem 0;
+        margin: 1.4rem 0 0.7rem 0;
         padding-bottom: 0.3rem;
-        border-bottom: 2px solid #f0f0f0;
+        border-bottom: 2px solid #eef0f4;
+        letter-spacing: 0.1px;
     }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ─── Load model (cache) ───────────────────────────────────────────────────────
 @st.cache_resource
 def load_model():
     base = os.path.dirname(__file__)
@@ -80,24 +101,15 @@ def load_model():
 
 @st.cache_resource
 def load_explainer(_model):
-    """
-    TreeExplainer không nhận Pipeline trực tiếp.
-    Phải lấy bước 'clf' bên trong ra.
-    """
     clf = _model.named_steps['clf']
     return shap.TreeExplainer(clf)
 
 
 def get_preprocessed(model, X_input):
-    """
-    Transform X qua tất cả bước trong Pipeline trừ bước cuối (clf),
-    để SHAP nhận đúng định dạng.
-    """
     preprocessor = Pipeline(model.steps[:-1])
     return preprocessor.transform(X_input)
 
 
-# ─── Helper functions ─────────────────────────────────────────────────────────
 def encode_input(age, gender, tenure, usage_freq, support_calls,
                  payment_delay, sub_type, contract_length, total_spend, last_interaction):
     gender_enc   = 1 if gender == "Female" else 0
@@ -140,10 +152,9 @@ def encode_batch(df_raw):
     return df
 
 
-# ─── Load và lưu vào session_state ───────────────────────────────────────────
 try:
     model, meta, scaler = load_model()
-    explainer = load_explainer(model)          # ✅ dùng hàm cache, tự lấy clf bên trong
+    explainer = load_explainer(model)
     st.session_state["model"]     = model
     st.session_state["meta"]      = meta
     st.session_state["scaler"]    = scaler
@@ -154,7 +165,6 @@ except Exception as e:
     st.session_state["load_error"] = str(e)
 
 
-# ─── UI Trang chủ ─────────────────────────────────────────────────────────────
 st.markdown('<div class="main-title">📊 Customer Churn Prediction</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Hệ thống dự đoán khả năng rời bỏ dịch vụ của khách hàng</div>',
             unsafe_allow_html=True)
@@ -164,7 +174,6 @@ if not MODEL_LOADED:
     st.info("Đảm bảo thư mục `models/` chứa: `best_model.pkl`, `feature_meta.pkl`")
     st.stop()
 
-# ─── Metric cards tổng quan ───────────────────────────────────────────────────
 st.markdown('<div class="section-header">Thông tin mô hình</div>', unsafe_allow_html=True)
 
 col1, col2, col3, col4 = st.columns(4)
@@ -179,7 +188,6 @@ with col4:
 
 st.divider()
 
-# ─── Giới thiệu tính năng ─────────────────────────────────────────────────────
 st.markdown('<div class="section-header">Các tính năng</div>', unsafe_allow_html=True)
 
 c1, c2, c3 = st.columns(3)
@@ -187,36 +195,29 @@ with c1:
     st.markdown("""
     <div class="metric-card">
         <h4>🔍 Dự đoán đơn lẻ</h4>
-        <p style="color:#555;font-size:0.9rem;">
-        Nhập thông tin 1 khách hàng → xem xác suất churn ngay lập tức
-        kèm biểu đồ SHAP giải thích lý do.
-        </p>
+        <p>Nhập thông tin 1 khách hàng → xem xác suất churn ngay lập tức
+        kèm biểu đồ SHAP giải thích lý do.</p>
     </div>
     """, unsafe_allow_html=True)
 with c2:
     st.markdown("""
     <div class="metric-card metric-card-green">
         <h4>📂 Dự đoán hàng loạt</h4>
-        <p style="color:#555;font-size:0.9rem;">
-        Upload file CSV nhiều khách hàng → chạy batch predict →
-        lọc theo rủi ro → download kết quả.
-        </p>
+        <p>Upload file CSV nhiều khách hàng → chạy batch predict →
+        lọc theo rủi ro → download kết quả.</p>
     </div>
     """, unsafe_allow_html=True)
 with c3:
     st.markdown("""
     <div class="metric-card metric-card-amber">
         <h4>📈 Dashboard phân tích</h4>
-        <p style="color:#555;font-size:0.9rem;">
-        Tổng quan phân phối churn, top khách hàng rủi ro cao,
-        SHAP summary toàn bộ dataset.
-        </p>
+        <p>Tổng quan phân phối churn, top khách hàng rủi ro cao,
+        SHAP summary toàn bộ dataset.</p>
     </div>
     """, unsafe_allow_html=True)
 
 st.divider()
 
-# ─── Giải thích features ──────────────────────────────────────────────────────
 st.markdown('<div class="section-header">Ý nghĩa các features đầu vào</div>', unsafe_allow_html=True)
 
 feature_info = pd.DataFrame({
@@ -238,8 +239,7 @@ feature_info = pd.DataFrame({
         "Số ngày kể từ lần tương tác gần nhất",
     ],
     "Tín hiệu churn": [
-        "Trung tính",
-        "Trung tính",
+        "Trung tính", "Trung tính",
         "Tenure ngắn → dễ rời hơn",
         "Dùng ít → giá trị cảm nhận thấp",
         "Nhiều → không hài lòng ⚠️",
@@ -255,9 +255,7 @@ st.dataframe(
     feature_info,
     hide_index=True,
     use_container_width=True,
-    column_config={
-        "Tín hiệu churn": st.column_config.TextColumn(width="medium"),
-    }
+    column_config={"Tín hiệu churn": st.column_config.TextColumn(width="medium")},
 )
 
 st.divider()

@@ -171,7 +171,11 @@ sample_idx = np.random.choice(len(df_enc), min(MAX_SHAP_SAMPLES, len(df_enc)), r
 df_shap_sample = df_enc.iloc[sample_idx].reset_index(drop=True)
 
 with st.spinner(f"Đang tính SHAP trên {len(df_shap_sample)} mẫu..."):
-    shap_vals = explainer.shap_values(df_shap_sample)
+    # ✅ Sửa: transform qua preprocessor trước
+    from sklearn.pipeline import Pipeline as _Pipeline
+    _preprocessor = _Pipeline(model.steps[:-1])
+    df_shap_transformed = _preprocessor.transform(df_shap_sample)
+    shap_vals = explainer.shap_values(df_shap_transformed)
     if isinstance(shap_vals, np.ndarray) and shap_vals.ndim == 3:
         sv_all = shap_vals[:, :, 1]
     elif isinstance(shap_vals, list):
@@ -494,16 +498,36 @@ high_support = df_full[df_full["Support Calls"] >= 7]["churn_probability"].mean(
 low_support  = df_full[df_full["Support Calls"] <= 2]["churn_probability"].mean()
 high_delay   = df_full[df_full["Payment Delay"] >= 20]["churn_probability"].mean()
 
-st.markdown(f"""
-<div class="insight-box">
-    <b>Feature quan trọng nhất:</b> <code>{top1_feat}</code> và <code>{top2_feat}</code>
-    có tầm ảnh hưởng lớn nhất đến dự đoán churn theo SHAP analysis.
-</div>
-<div class="warn-box">
-    <b>Nhóm rủi ro cao cần chú ý:</b><br>
-    Khách hàng gọi support >= 7 lần: xác suất churn trung bình
-    <b>{high_support*100:.1f}%</b> (so với {low_support*100:.1f}% khi <= 2 lần).<br>
-    Khách hàng trễ thanh toán >= 20 ngày: xác suất churn trung bình
-    <b>{high_delay*100:.1f}%</b>.
-</div>
+st.markdown("""
+<style>
+    html, body, [class*="css"] { font-size: 15px; }
+    .section-header {
+        font-size: 1rem; font-weight: 700; color: #1a1a2e;
+        margin: 1.4rem 0 0.7rem 0;
+        padding-bottom: 0.3rem;
+        border-bottom: 2px solid #eef0f4;
+    }
+    .insight-box {
+        background: #f0f6ff;
+        border-radius: 10px;
+        padding: 0.8rem 1.1rem;
+        border-left: 4px solid #378ADD;
+        font-size: 0.86rem;
+        color: #1a3a5c;
+        margin-bottom: 0.8rem;
+        border: 1px solid #c9dff7;
+        border-left: 4px solid #378ADD;
+    }
+    .warn-box {
+        background: #fffaf0;
+        border-radius: 10px;
+        padding: 0.8rem 1.1rem;
+        border-left: 4px solid #BA7517;
+        font-size: 0.86rem;
+        color: #6b3a0a;
+        margin-bottom: 0.8rem;
+        border: 1px solid #f0d9a8;
+        border-left: 4px solid #BA7517;
+    }
+</style>
 """, unsafe_allow_html=True)
