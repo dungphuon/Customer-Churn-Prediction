@@ -176,21 +176,29 @@ if submitted:
     """, unsafe_allow_html=True)
 
     # Tính SHAP
-    X_transformed = get_preprocessed(model, X_input)
-    shap_vals = explainer.shap_values(X_transformed)
-    # Xử lý cả 2 dạng API (cũ/mới)
-    if isinstance(shap_vals, np.ndarray) and shap_vals.ndim == 3:
-        sv = shap_vals[0, :, 1]
-    elif isinstance(shap_vals, list):
-        sv = np.array(shap_vals[1][0])
-    else:
-        sv = shap_vals[0]
+    # Tính SHAP
+    explainer_type = st.session_state.get("explainer_type", "tree")
+    X_transformed  = get_preprocessed(model, X_input)
 
-    base_val = explainer.expected_value
-    if isinstance(base_val, (list, np.ndarray)):
-        base_val = float(base_val[1])
+    shap_vals = explainer.shap_values(X_transformed)
+
+    if explainer_type == 'linear':
+        # LinearExplainer trả về array 2D (n_samples, n_features)
+        sv = np.array(shap_vals[0]) if isinstance(shap_vals, list) else np.array(shap_vals)[0]
+        base_val = float(explainer.expected_value) if not isinstance(explainer.expected_value, (list, np.ndarray)) \
+                   else float(explainer.expected_value[0])
     else:
-        base_val = float(base_val)
+        if isinstance(shap_vals, np.ndarray) and shap_vals.ndim == 3:
+            sv = shap_vals[0, :, 1]
+        elif isinstance(shap_vals, list):
+            sv = np.array(shap_vals[1][0])
+        else:
+            sv = shap_vals[0]
+        base_val = explainer.expected_value
+        if isinstance(base_val, (list, np.ndarray)):
+            base_val = float(base_val[1])
+        else:
+            base_val = float(base_val)
 
     # Sắp xếp theo |SHAP| giảm dần, lấy top 10
     idx = np.argsort(np.abs(sv))[::-1]

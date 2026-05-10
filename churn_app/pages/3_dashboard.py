@@ -171,66 +171,33 @@ sample_idx = np.random.choice(len(df_enc), min(MAX_SHAP_SAMPLES, len(df_enc)), r
 df_shap_sample = df_enc.iloc[sample_idx].reset_index(drop=True)
 
 with st.spinner(f"Đang tính SHAP trên {len(df_shap_sample)} mẫu..."):
-    # ✅ Sửa: transform qua preprocessor trước
     from sklearn.pipeline import Pipeline as _Pipeline
-    _preprocessor = _Pipeline(model.steps[:-1])
+    _preprocessor    = _Pipeline(model.steps[:-1])
     df_shap_transformed = _preprocessor.transform(df_shap_sample)
+    explainer_type   = st.session_state.get("explainer_type", "tree")
+
     shap_vals = explainer.shap_values(df_shap_transformed)
-    if isinstance(shap_vals, np.ndarray) and shap_vals.ndim == 3:
-        sv_all = shap_vals[:, :, 1]
-    elif isinstance(shap_vals, list):
-        sv_all = np.array(shap_vals[1])
+
+    if explainer_type == 'linear':
+        sv_all = np.array(shap_vals) if not isinstance(shap_vals, list) else np.array(shap_vals[0])
+        if sv_all.ndim == 1:
+            sv_all = sv_all.reshape(1, -1)
     else:
-        sv_all = shap_vals
+        if isinstance(shap_vals, np.ndarray) and shap_vals.ndim == 3:
+            sv_all = shap_vals[:, :, 1]
+        elif isinstance(shap_vals, list):
+            sv_all = np.array(shap_vals[1])
+        else:
+            sv_all = shap_vals
 
-mean_abs_shap = np.abs(sv_all).mean(axis=0)
-df_shap_imp = pd.DataFrame({
-    "Feature":    FEATURE_NAMES,
-    "Mean |SHAP|": mean_abs_shap
-}).sort_values("Mean |SHAP|", ascending=True)
-
-col_shap, col_fi = st.columns(2)
-
-with col_shap:
-    fig_shap = go.Figure(go.Bar(
-        x=df_shap_imp["Mean |SHAP|"],
-        y=df_shap_imp["Feature"],
-        orientation="h",
-        marker_color="#7F77DD",
-        text=[f"{v:.4f}" for v in df_shap_imp["Mean |SHAP|"]],
-        textposition="outside",
-    ))
-    fig_shap.update_layout(
-        title="SHAP — Tầm quan trọng trung bình",
-        xaxis_title="Mean |SHAP value|",
-        height=380, margin=dict(l=160, r=80, t=50, b=40),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-    )
-    st.plotly_chart(fig_shap, use_container_width=True)
-
-with col_fi:
-    # Feature importance của model (Gini)
-    importances = model.named_steps['clf'].feature_importances_
-    df_fi = pd.DataFrame({
-        "Feature":    FEATURE_NAMES,
-        "Importance": importances,
-    }).sort_values("Importance", ascending=True)
-
-    fig_fi = go.Figure(go.Bar(
-        x=df_fi["Importance"],
-        y=df_fi["Feature"],
-        orientation="h",
-        marker_color="#1D9E75",
-        text=[f"{v:.3f}" for v in df_fi["Importance"]],
-        textposition="outside",
-    ))
-    fig_fi.update_layout(
-        title="Feature Importance (Gini — mô hình)",
-        xaxis_title="Importance score",
-        height=380, margin=dict(l=160, r=80, t=50, b=40),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-    )
-    st.plotly_chart(fig_fi, use_container_width=True)
+    mean_abs_shap = np.abs(sv_all).mean(axis=0)
+    
+    # Ensure lengths match after preprocessing
+    min_len = min(len(FEATURE_NAMES), len(mean_abs_shap))
+    df_shap_imp = pd.DataFrame({
+        "Feature":     FEATURE_NAMES[:min_len],
+        "Mean |SHAP|": mean_abs_shap[:min_len]
+    }).sort_values("Mean |SHAP|", ascending=True)
 
 # ─── SHAP Scatter: phân phối SHAP từng feature ────────────────────────────────
 st.markdown('<div class="section-header">SHAP theo từng feature — Hướng tác động</div>',
@@ -662,62 +629,54 @@ with col_shap:
 # ============================================================
 
 with col_fi:
-
     clf = model.named_steps['clf']
-
-    if hasattr(clf, "feature_importances_"):
-
+    if hasattr(clf, 'feature_importances_'):
         importances = clf.feature_importances_
-
-        min_len_fi = min(
-            len(importances),
-            len(transformed_feature_names)
-        )
-
+        min_len = min(len(FEATURE_NAMES), len(importances))
         df_fi = pd.DataFrame({
-            "Feature": transformed_feature_names[:min_len_fi],
-            "Importance": importances[:min_len_fi],
-        }).sort_values(
-            "Importance",
-            ascending=True
-        )
+            "Feature":    FEATURE_NAMES[:min_len],
+            "Importance": importances[:min_len],
+        }).sort_values("Importance", ascending=True)
 
         fig_fi = go.Figure(go.Bar(
             x=df_fi["Importance"],
             y=df_fi["Feature"],
             orientation="h",
             marker_color="#1D9E75",
-            text=[
-                f"{v:.4f}"
-                for v in df_fi["Importance"]
-            ],
+            text=[f"{v:.3f}" for v in df_fi["Importance"]],
             textposition="outside",
         ))
-
         fig_fi.update_layout(
-            title="Feature Importance (Model)",
+            title="Feature Importance (Gini — mô hình)",
             xaxis_title="Importance score",
-            height=420,
-            margin=dict(
-                l=180,
-                r=60,
-                t=50,
-                b=40
-            ),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+            height=380, margin=dict(l=160, r=80, t=50, b=40),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         )
-
-        st.plotly_chart(
-            fig_fi,
-            use_container_width=True
-        )
-
+        st.plotly_chart(fig_fi, use_container_width=True)
     else:
+        # Logistic Regression → dùng coef thay thế
+        coefs = np.abs(clf.coef_[0])
+        min_len = min(len(FEATURE_NAMES), len(coefs))
+        df_fi = pd.DataFrame({
+            "Feature":    FEATURE_NAMES[:min_len],
+            "Importance": coefs[:min_len],
+        }).sort_values("Importance", ascending=True)
 
-        st.info(
-            "Model hiện tại không hỗ trợ feature_importances_."
+        fig_fi = go.Figure(go.Bar(
+            x=df_fi["Importance"],
+            y=df_fi["Feature"],
+            orientation="h",
+            marker_color="#1D9E75",
+            text=[f"{v:.3f}" for v in df_fi["Importance"]],
+            textposition="outside",
+        ))
+        fig_fi.update_layout(
+            title="Feature Importance (|Coef| — Logistic Regression)",
+            xaxis_title="|Coefficient|",
+            height=380, margin=dict(l=160, r=80, t=50, b=40),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         )
+        st.plotly_chart(fig_fi, use_container_width=True)
 
 # ─── Insight tự động ─────────────────────────────────────────
 

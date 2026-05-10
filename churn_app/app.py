@@ -102,7 +102,18 @@ def load_model():
 @st.cache_resource
 def load_explainer(_model):
     clf = _model.named_steps['clf']
-    return shap.TreeExplainer(clf)
+    model_type = type(clf).__name__
+
+    if any(x in model_type for x in ['LGBM', 'XGB', 'RandomForest', 'DecisionTree', 'GradientBoosting']):
+        explainer = shap.TreeExplainer(clf)
+        return explainer, 'tree'
+    else:
+        # Logistic Regression → LinearExplainer
+        preprocessor = Pipeline(_model.steps[:-1])
+        explainer = shap.LinearExplainer(clf, shap.maskers.Independent(
+            np.zeros((1, clf.coef_.shape[1]))
+        ))
+        return explainer, 'linear'
 
 
 def get_preprocessed(model, X_input):
@@ -154,11 +165,12 @@ def encode_batch(df_raw):
 
 try:
     model, meta, scaler = load_model()
-    explainer = load_explainer(model)
-    st.session_state["model"]     = model
-    st.session_state["meta"]      = meta
-    st.session_state["scaler"]    = scaler
-    st.session_state["explainer"] = explainer
+    explainer, explainer_type = load_explainer(model)
+    st.session_state["model"]          = model
+    st.session_state["meta"]           = meta
+    st.session_state["scaler"]         = scaler
+    st.session_state["explainer"]      = explainer
+    st.session_state["explainer_type"] = explainer_type
     MODEL_LOADED = True
 except Exception as e:
     MODEL_LOADED = False
