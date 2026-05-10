@@ -498,36 +498,254 @@ high_support = df_full[df_full["Support Calls"] >= 7]["churn_probability"].mean(
 low_support  = df_full[df_full["Support Calls"] <= 2]["churn_probability"].mean()
 high_delay   = df_full[df_full["Payment Delay"] >= 20]["churn_probability"].mean()
 
+# ─── SHAP Summary (Mean |SHAP|) ───────────────────────────────────────────────
+st.markdown(
+    '<div class="section-header">Tầm quan trọng Features — SHAP Summary</div>',
+    unsafe_allow_html=True
+)
+
 st.markdown("""
-<style>
-    html, body, [class*="css"] { font-size: 15px; }
-    .section-header {
-        font-size: 1rem; font-weight: 700; color: #1a1a2e;
-        margin: 1.4rem 0 0.7rem 0;
-        padding-bottom: 0.3rem;
-        border-bottom: 2px solid #eef0f4;
-    }
-    .insight-box {
-        background: #f0f6ff;
-        border-radius: 10px;
-        padding: 0.8rem 1.1rem;
-        border-left: 4px solid #378ADD;
-        font-size: 0.86rem;
-        color: #1a3a5c;
-        margin-bottom: 0.8rem;
-        border: 1px solid #c9dff7;
-        border-left: 4px solid #378ADD;
-    }
-    .warn-box {
-        background: #fffaf0;
-        border-radius: 10px;
-        padding: 0.8rem 1.1rem;
-        border-left: 4px solid #BA7517;
-        font-size: 0.86rem;
-        color: #6b3a0a;
-        margin-bottom: 0.8rem;
-        border: 1px solid #f0d9a8;
-        border-left: 4px solid #BA7517;
-    }
-</style>
+<div class="insight-box">
+    <b>SHAP Mean |SHAP|:</b> Trung bình giá trị tuyệt đối của SHAP trên toàn bộ dataset.
+    Feature nào có giá trị cao hơn → ảnh hưởng đến dự đoán nhiều hơn.
+    SHAP phản ánh mức độ tác động thực tế của từng feature lên dự đoán churn.
+</div>
 """, unsafe_allow_html=True)
+
+MAX_SHAP_SAMPLES = 300
+
+sample_idx = np.random.choice(
+    len(df_enc),
+    min(MAX_SHAP_SAMPLES, len(df_enc)),
+    replace=False
+)
+
+df_shap_sample = df_enc.iloc[sample_idx].reset_index(drop=True)
+
+with st.spinner(f"Đang tính SHAP trên {len(df_shap_sample)} mẫu..."):
+
+    from sklearn.pipeline import Pipeline as _Pipeline
+
+    # =========================================================
+    # Lấy phần preprocessing trước classifier
+    # =========================================================
+
+    _preprocessor = _Pipeline(model.steps[:-1])
+
+    # Transform dữ liệu
+    df_shap_transformed = _preprocessor.transform(df_shap_sample)
+
+    # =========================================================
+    # Tính SHAP values
+    # =========================================================
+
+    shap_vals = explainer.shap_values(df_shap_transformed)
+
+    # Xử lý nhiều format SHAP khác nhau
+    if isinstance(shap_vals, np.ndarray) and shap_vals.ndim == 3:
+        sv_all = shap_vals[:, :, 1]
+
+    elif isinstance(shap_vals, list):
+        sv_all = np.array(shap_vals[1])
+
+    else:
+        sv_all = shap_vals
+
+    # =========================================================
+    # Mean Absolute SHAP
+    # =========================================================
+
+    mean_abs_shap = np.abs(sv_all).mean(axis=0)
+
+    # =========================================================
+    # Feature names sau preprocessing
+    # =========================================================
+
+    try:
+        transformed_feature_names = (
+            _preprocessor.get_feature_names_out()
+        )
+
+    except Exception:
+
+        transformed_feature_names = [
+            f"Feature_{i}"
+            for i in range(len(mean_abs_shap))
+        ]
+
+    # =========================================================
+    # Đảm bảo số lượng khớp nhau
+    # =========================================================
+
+    min_len = min(
+        len(transformed_feature_names),
+        len(mean_abs_shap)
+    )
+
+    transformed_feature_names = (
+        transformed_feature_names[:min_len]
+    )
+
+    mean_abs_shap = mean_abs_shap[:min_len]
+
+    # =========================================================
+    # DataFrame SHAP importance
+    # =========================================================
+
+    df_shap_imp = pd.DataFrame({
+        "Feature": transformed_feature_names,
+        "Mean |SHAP|": mean_abs_shap
+    }).sort_values(
+        "Mean |SHAP|",
+        ascending=True
+    )
+
+# ─── DEBUG INFO ─────────────────────────────────────────────
+
+with st.expander("🔍 Debug SHAP"):
+
+    st.write(
+        "Số feature sau preprocessing:",
+        len(transformed_feature_names)
+    )
+
+    st.write(
+        "Số SHAP values:",
+        len(mean_abs_shap)
+    )
+
+    st.dataframe(df_shap_imp.tail(10))
+
+# ─── SHAP BAR + FEATURE IMPORTANCE ──────────────────────────
+
+col_shap, col_fi = st.columns(2)
+
+# ============================================================
+# SHAP Importance
+# ============================================================
+
+with col_shap:
+
+    fig_shap = go.Figure(go.Bar(
+        x=df_shap_imp["Mean |SHAP|"],
+        y=df_shap_imp["Feature"],
+        orientation="h",
+        marker_color="#7F77DD",
+        text=[
+            f"{v:.4f}"
+            for v in df_shap_imp["Mean |SHAP|"]
+        ],
+        textposition="outside",
+    ))
+
+    fig_shap.update_layout(
+        title="SHAP — Tầm quan trọng trung bình",
+        xaxis_title="Mean |SHAP value|",
+        height=420,
+        margin=dict(
+            l=180,
+            r=60,
+            t=50,
+            b=40
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+
+    st.plotly_chart(
+        fig_shap,
+        use_container_width=True
+    )
+
+# ============================================================
+# Feature Importance của model
+# ============================================================
+
+with col_fi:
+
+    clf = model.named_steps['clf']
+
+    if hasattr(clf, "feature_importances_"):
+
+        importances = clf.feature_importances_
+
+        min_len_fi = min(
+            len(importances),
+            len(transformed_feature_names)
+        )
+
+        df_fi = pd.DataFrame({
+            "Feature": transformed_feature_names[:min_len_fi],
+            "Importance": importances[:min_len_fi],
+        }).sort_values(
+            "Importance",
+            ascending=True
+        )
+
+        fig_fi = go.Figure(go.Bar(
+            x=df_fi["Importance"],
+            y=df_fi["Feature"],
+            orientation="h",
+            marker_color="#1D9E75",
+            text=[
+                f"{v:.4f}"
+                for v in df_fi["Importance"]
+            ],
+            textposition="outside",
+        ))
+
+        fig_fi.update_layout(
+            title="Feature Importance (Model)",
+            xaxis_title="Importance score",
+            height=420,
+            margin=dict(
+                l=180,
+                r=60,
+                t=50,
+                b=40
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+
+        st.plotly_chart(
+            fig_fi,
+            use_container_width=True
+        )
+
+    else:
+
+        st.info(
+            "Model hiện tại không hỗ trợ feature_importances_."
+        )
+
+# ─── Insight tự động ─────────────────────────────────────────
+
+st.markdown(
+    '<div class="section-header">Insight từ SHAP</div>',
+    unsafe_allow_html=True
+)
+
+top_feats = (
+    df_shap_imp
+    .sort_values("Mean |SHAP|", ascending=False)
+    .head(5)
+)
+
+st.markdown("""
+<div class="warn-box">
+""", unsafe_allow_html=True)
+
+for i, row in top_feats.iterrows():
+
+    st.markdown(
+        f"""
+- <b>{row['Feature']}</b>
+  ảnh hưởng mạnh đến dự đoán churn
+  (Mean |SHAP| = {row['Mean |SHAP|']:.4f})
+"""
+        ,
+        unsafe_allow_html=True
+    )
+
+st.markdown("</div>", unsafe_allow_html=True)
