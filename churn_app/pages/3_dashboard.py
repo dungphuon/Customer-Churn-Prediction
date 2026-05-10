@@ -206,7 +206,7 @@ with col_shap:
 
 with col_fi:
     # Feature importance của model (Gini)
-    importances = model.feature_importances_
+    importances = model.named_steps['clf'].feature_importances_
     df_fi = pd.DataFrame({
         "Feature":    FEATURE_NAMES,
         "Importance": importances,

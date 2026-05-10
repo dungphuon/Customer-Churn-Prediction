@@ -4,7 +4,9 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
+import shap
 import os
+from sklearn.pipeline import Pipeline
 
 # ─── Cấu hình trang ───────────────────────────────────────────────────────────
 st.set_page_config(
@@ -68,7 +70,6 @@ def load_model():
         model = pickle.load(f)
     with open(os.path.join(model_dir, "feature_meta.pkl"), "rb") as f:
         meta = pickle.load(f)
-    # scaler optional (dùng nếu model cần)
     scaler_path = os.path.join(model_dir, "scaler.pkl")
     scaler = None
     if os.path.exists(scaler_path):
@@ -79,17 +80,29 @@ def load_model():
 
 @st.cache_resource
 def load_explainer(_model):
-    import shap
-    return shap.TreeExplainer(_model)
+    """
+    TreeExplainer không nhận Pipeline trực tiếp.
+    Phải lấy bước 'clf' bên trong ra.
+    """
+    clf = _model.named_steps['clf']
+    return shap.TreeExplainer(clf)
 
 
-# Helper functions dùng chung toàn app
+def get_preprocessed(model, X_input):
+    """
+    Transform X qua tất cả bước trong Pipeline trừ bước cuối (clf),
+    để SHAP nhận đúng định dạng.
+    """
+    preprocessor = Pipeline(model.steps[:-1])
+    return preprocessor.transform(X_input)
+
+
+# ─── Helper functions ─────────────────────────────────────────────────────────
 def encode_input(age, gender, tenure, usage_freq, support_calls,
                  payment_delay, sub_type, contract_length, total_spend, last_interaction):
-    """Chuyển input từ form (dạng chữ) thành vector số cho model."""
-    gender_enc       = 1 if gender == "Female" else 0
-    sub_map          = {"Basic": 0, "Standard": 1, "Premium": 2}
-    contract_map     = {"Monthly": 0, "Quarterly": 1, "Annual": 2}
+    gender_enc   = 1 if gender == "Female" else 0
+    sub_map      = {"Basic": 0, "Standard": 1, "Premium": 2}
+    contract_map = {"Monthly": 0, "Quarterly": 1, "Annual": 2}
     return pd.DataFrame([{
         "Age":               float(age),
         "Gender":            gender_enc,
@@ -114,10 +127,10 @@ def risk_label(prob):
 
 
 def encode_batch(df_raw):
-    """Encode DataFrame thô (từ CSV người dùng upload) sang dạng model đọc được."""
     df = df_raw.copy()
     if "Gender" in df.columns:
-        df["Gender"] = df["Gender"].map({"Male": 0, "Female": 1, 0: 0, 1: 1}).fillna(0).astype(int)
+        df["Gender"] = df["Gender"].map(
+            {"Male": 0, "Female": 1, 0: 0, 1: 1}).fillna(0).astype(int)
     if "Subscription Type" in df.columns:
         df["Subscription Type"] = df["Subscription Type"].map(
             {"Basic": 0, "Standard": 1, "Premium": 2, 0: 0, 1: 1, 2: 2}).fillna(0).astype(int)
@@ -127,10 +140,10 @@ def encode_batch(df_raw):
     return df
 
 
-# Lưu vào session_state để các page khác dùng
+# ─── Load và lưu vào session_state ───────────────────────────────────────────
 try:
     model, meta, scaler = load_model()
-    explainer = load_explainer(model)
+    explainer = load_explainer(model)          # ✅ dùng hàm cache, tự lấy clf bên trong
     st.session_state["model"]     = model
     st.session_state["meta"]      = meta
     st.session_state["scaler"]    = scaler
@@ -147,7 +160,7 @@ st.markdown('<div class="sub-title">Hệ thống dự đoán khả năng rời b
             unsafe_allow_html=True)
 
 if not MODEL_LOADED:
-    st.error(f"❌ Không load được model: {st.session_state.get('load_error','unknown')}")
+    st.error(f"❌ Không load được model: {st.session_state.get('load_error', 'unknown')}")
     st.info("Đảm bảo thư mục `models/` chứa: `best_model.pkl`, `feature_meta.pkl`")
     st.stop()
 
@@ -155,27 +168,14 @@ if not MODEL_LOADED:
 st.markdown('<div class="section-header">Thông tin mô hình</div>', unsafe_allow_html=True)
 
 col1, col2, col3, col4 = st.columns(4)
-
 with col1:
-    st.metric(
-        label="Mô hình",
-        value=meta.get("best_model_name", "Best Model"),
-    )
+    st.metric("Mô hình", meta.get("best_model_name", "Best Model"))
 with col2:
-    st.metric(
-        label="Churn rate (test set)",
-        value=f"{meta.get('churn_rate_test', 0.341)*100:.1f}%",
-    )
+    st.metric("Churn rate (test set)", f"{meta.get('churn_rate_test', 0.341)*100:.1f}%")
 with col3:
-    st.metric(
-        label="Số features",
-        value=len(meta.get("feature_names", [])),
-    )
+    st.metric("Số features", len(meta.get("feature_names", [])))
 with col4:
-    st.metric(
-        label="Trạng thái",
-        value="✅ Sẵn sàng",
-    )
+    st.metric("Trạng thái", "✅ Sẵn sàng")
 
 st.divider()
 
@@ -183,7 +183,6 @@ st.divider()
 st.markdown('<div class="section-header">Các tính năng</div>', unsafe_allow_html=True)
 
 c1, c2, c3 = st.columns(3)
-
 with c1:
     st.markdown("""
     <div class="metric-card">
@@ -194,7 +193,6 @@ with c1:
         </p>
     </div>
     """, unsafe_allow_html=True)
-
 with c2:
     st.markdown("""
     <div class="metric-card metric-card-green">
@@ -205,7 +203,6 @@ with c2:
         </p>
     </div>
     """, unsafe_allow_html=True)
-
 with c3:
     st.markdown("""
     <div class="metric-card metric-card-amber">
